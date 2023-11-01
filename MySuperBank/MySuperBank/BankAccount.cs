@@ -24,17 +24,26 @@ namespace MySuperBank
             }
         }
 
+        private readonly decimal _minimumBalance;
+
+        public BankAccount(string name, decimal initialBalance) : this(name, initialBalance, 0) { }
+
+        public BankAccount(string name, decimal initialBalance, decimal minimumBalance)
+        {
+            Number = s_accountNumberSeed.ToString();
+            s_accountNumberSeed++;
+
+            Owner = name;
+            _minimumBalance = minimumBalance;
+            if (initialBalance > 0)
+                MakeDeposit(initialBalance, DateTime.Now, "Minimum balance");
+        }
+
         private static int s_accountNumberSeed = 1234567890;
 
         private List<Transaction> allTransactions = new List<Transaction>();
 
-        public BankAccount(string name, decimal initialBalance)
-        {
-            this.Owner = name;
-            MakeDeposit(initialBalance, DateTime.Now, "Starting Balance");
-            Number = s_accountNumberSeed.ToString();
-            s_accountNumberSeed++;
-        }
+        public virtual void PerformMonthEndTransactions() { }
 
         public void MakeDeposit(decimal amount, DateTime date, string note)
         {
@@ -52,12 +61,23 @@ namespace MySuperBank
             {
                 throw new ArgumentOutOfRangeException(nameof(amount), "Amount of withdrawal must be positive");
             }
-            if (Balance - amount < 0)
+            Transaction? overdraftTransaction = CheckWithdrawalLimit(Balance - amount < _minimumBalance);
+            Transaction? withdrawal = new(-amount, date, note);
+            allTransactions.Add(withdrawal);
+            if (overdraftTransaction != null)
+                allTransactions.Add(overdraftTransaction);
+        }
+
+        protected virtual Transaction? CheckWithdrawalLimit(bool isOverdrawn)
+        {
+            if (isOverdrawn)
             {
                 throw new InvalidOperationException("Not sufficient funds for this withdrawal");
             }
-            var withdrawal = new Transaction(-amount, date, note);
-            allTransactions.Add(withdrawal);
+            else
+            {
+                return default;
+            }
         }
 
         public string GetAccountHistory()
